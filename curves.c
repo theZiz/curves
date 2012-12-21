@@ -1,5 +1,6 @@
 #include <string.h>
 #include <sparrow3d.h>
+#include <math.h>
 
 //#define SCALE_UP
 spFontPointer font = NULL;
@@ -18,7 +19,9 @@ typedef struct sPoint
 
 typedef enum eType
 {
-	lagrange = 0
+	lagrange = 0,
+	hermit = 1,
+	bezier = 2
 } tType;
 
 tType type = lagrange;
@@ -76,6 +79,26 @@ float L_g_i(float t,int g,int i)
 	return result;
 }
 
+int fak(int i)
+{
+	if (i <= 1)
+		return 1;
+	return i*fak(i-1);
+}
+
+float g_over_i(int g,int i)
+{
+	if (0 <= i && i <= g)
+		return (float)(fak(g))/(float)(fak(i)*fak(g-i));
+	return 0;
+}
+
+float B_g_i(float t,int g,int i)
+{
+	return g_over_i(g,i)*pow(1.0f-t,g-i)*pow(t,i);
+}
+
+
 void draw(void)
 {
 	Sint32* modellViewMatrix=spGetMatrix();
@@ -132,7 +155,25 @@ void draw(void)
 					         spFloatToFixed( mom.x),spFloatToFixed( mom.y),spFloatToFixed( mom.z),spGetFastRGB(0,255,255));
 				prev = mom;
 			}
-				
+		break;
+		case hermit:
+		break;
+		case bezier:
+			for (t = 0.0f; t <= 1.0f; t+=0.01f)
+			{
+				tPoint mom = {0.0f,0.0f,0.0f};
+				for (i = 0; i < pointCount; i++)
+				{
+					float B = B_g_i(t,pointCount-1,i);
+					mom.x += B * pointArray[i]->x;
+					mom.y += B * pointArray[i]->y;
+					mom.z += B * pointArray[i]->z;
+				}
+				if (t!=0)
+					spLine3D(spFloatToFixed(prev.x),spFloatToFixed(prev.y),spFloatToFixed(prev.z),
+					         spFloatToFixed( mom.x),spFloatToFixed( mom.y),spFloatToFixed( mom.z),spGetFastRGB(0,255,255));
+				prev = mom;
+			}
 		break;
 	}
 	spFontDrawMiddle(screen->w>>1,screen->h-font->maxheight-2,-1,"Press [R] to quit",font);
@@ -162,7 +203,7 @@ int calc(Uint32 steps)
 int main(int argc, char **argv)
 {
 	printf("Use curves.sh kind control-point-1 control-point-2 [control-point-3..n]\n");
-	printf("* kind can be \"lagrange\".\n");
+	printf("* kind can be \"lagrange\", \"bezier\".\n");
 	printf("* a point has to have this form: {x,y,z,u} with x,y,z,u floating points numbers.\n");
 	printf("  \"u\" is a (not always used) parameter value.\n");
 	int i;
@@ -173,6 +214,12 @@ int main(int argc, char **argv)
 	}
 	if (strcmp(argv[1],"lagrange") == 0)
 		type = lagrange;
+	else
+	if (strcmp(argv[1],"hermit") == 0)
+		type = hermit;
+	else
+	if (strcmp(argv[1],"bezier") == 0)
+		type = bezier;
 	else
 	{
 		printf("Unknown argument %s.\n",argv[1]);
