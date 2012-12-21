@@ -12,7 +12,7 @@ SDL_Surface* screen = NULL;
 typedef struct sPoint *pPoint;
 typedef struct sPoint
 {
-	float x,y,z;
+	float x,y,z,u;
 	pPoint next;
 } tPoint;
 
@@ -25,6 +25,8 @@ tType type = lagrange;
 
 pPoint firstPoint = NULL;
 pPoint  lastPoint = NULL;
+pPoint* pointArray;
+int pointCount;
 
 void resize( Uint16 w, Uint16 h )
 {
@@ -60,6 +62,19 @@ void resize( Uint16 w, Uint16 h )
 
 Sint32 rotation = 0;
 
+float L_g_i(float t,int g,int i)
+{
+	int k;
+	float result = 1.0f;
+	for (k = 0; k <= g; k++)
+	{
+		if (k == i)
+			continue;
+		result *= ((float)(t)-pointArray[k]->u)/(pointArray[i]->u-pointArray[k]->u);
+	}
+	return result;
+}
+
 void draw(void)
 {
 	Sint32* modellViewMatrix=spGetMatrix();
@@ -78,13 +93,41 @@ void draw(void)
 	spLine3D(0,0,0,0,0,1<<SP_ACCURACY,spGetFastRGB(0,0,255));
 	
 	pPoint point = firstPoint;
-	
 	while (point)
 	{
 		spEllipse3D(spFloatToFixed(point->x),spFloatToFixed(point->y),spFloatToFixed(point->z),1<<SP_ACCURACY-4,1<<SP_ACCURACY-4,spGetFastRGB(255,255,0));
 		point = point->next;
 	}
+	//control polygon
+	int i;
+	for (i = 1; i < pointCount; i++)
+		spLine3D(spFloatToFixed(pointArray[i-1]->x),spFloatToFixed(pointArray[i-1]->y),spFloatToFixed(pointArray[i-1]->z),
+						 spFloatToFixed(pointArray[i  ]->x),spFloatToFixed(pointArray[i  ]->y),spFloatToFixed(pointArray[i  ]->z),spGetFastRGB(127,127,127));
 
+  //curve
+  float t;
+  tPoint prev;
+  switch (type)
+  {
+		case lagrange:
+			for (t = 0.0f; t <= (float)((pointCount-1)*2-1); t+=0.01f)
+			{
+				tPoint mom = {0.0f,0.0f,0.0f};
+				for (i = 0; i < pointCount; i++)
+				{
+					float L = L_g_i(t,pointCount-1,i);
+					mom.x += L * pointArray[i]->x;
+					mom.y += L * pointArray[i]->y;
+					mom.z += L * pointArray[i]->z;
+				}
+				if (t!=0)
+					spLine3D(spFloatToFixed(prev.x),spFloatToFixed(prev.y),spFloatToFixed(prev.z),
+					         spFloatToFixed( mom.x),spFloatToFixed( mom.y),spFloatToFixed( mom.z),spGetFastRGB(0,255,255));
+				prev = mom;
+			}
+				
+		break;
+	}
 	spFontDrawMiddle(screen->w>>1,screen->h-font->maxheight-2,-1,"Press [R] to quit",font);
 	#ifdef SCALE_UP
 	spScale2XSmooth(screen,real_screen);
@@ -105,9 +148,10 @@ int main(int argc, char **argv)
 {
 	printf("Use curves.sh kind control-point-1 control-point-2 [control-point-3..n]\n");
 	printf("* kind can be \"lagrange\".\n");
-	printf("* a point has to have this form: {x,y,z} with x,y,z floating points numbers.\n");
+	printf("* a point has to have this form: {x,y,z,u} with x,y,z,u floating points numbers.\n");
+	printf("  \"u\" is a (not always used) parameter value.\n");
 	int i;
-	if (argc < 8)
+	if (argc < 10)
 	{
 		printf("Too few arguments.\n");
 		return 1;
@@ -119,17 +163,19 @@ int main(int argc, char **argv)
 		printf("Unknown argument %s.\n",argv[1]);
 		return 1;
 	}
-	if ((argc-2) % 3 != 0)
+	if ((argc-2) % 4 != 0)
 	{
-		printf("Every point needs 3 floats!\n");
+		printf("Every point needs 4 floats!\n");
 		return 1;
 	}
-	for (i = 2; i < argc; i+=3)
+	pointCount = 0;
+	for (i = 2; i < argc; i+=4)
 	{
 		pPoint point = (pPoint)malloc(sizeof(tPoint));
 		point->x = atof(argv[i+0]);
 		point->y = atof(argv[i+1]);
 		point->z = atof(argv[i+2]);
+		point->u = atof(argv[i+3]);
 		point->next = NULL;
 		if (lastPoint)
 			lastPoint->next = point;
@@ -137,7 +183,18 @@ int main(int argc, char **argv)
 			firstPoint = point;
 		lastPoint = point;
 		printf("Added point ( %6.2f | %6.2f | %6.2f )\n",point->x,point->y,point->z);
+		pointCount++;
 	}
+	pointArray = (pPoint*)malloc(sizeof(pPoint)*pointCount);
+	i = 0;
+	pPoint point = firstPoint;
+	while (point)
+	{
+		pointArray[i]	= point;
+		i++;
+		point = point->next;
+	}
+	
 	spSetDefaultWindowSize( 800, 480 );
 	spInitCore();
 	//Setup
@@ -148,6 +205,10 @@ int main(int argc, char **argv)
 	screen = spCreateDefaultWindow();
 	resize( screen->w, screen->h );
 	#endif
+	
+	spSetZSet(0);
+	spSetZTest(0);
+	
 	spLoop(draw,calc,10,resize,NULL);
 	#ifdef SCALE_UP
 	spDeleteSurface(screen);
