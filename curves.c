@@ -136,10 +136,16 @@ void draw(void)
 	spFlip();
 }
 
+int pause = 0;
 int calc(Uint32 steps)
 {
 	PspInput engineInput = spGetInput();
-	if (!engineInput->button[SP_BUTTON_SELECT])
+	if (engineInput->button[SP_BUTTON_SELECT])
+	{
+		pause = 1-pause;
+		engineInput->button[SP_BUTTON_SELECT] = 0;
+	}
+	if (!pause)
 		rotation += steps*32;
 	if (engineInput->button[SP_BUTTON_START])
 		return 1;
