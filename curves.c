@@ -129,6 +129,7 @@ void draw(void)
 		break;
 	}
 	spFontDrawMiddle(screen->w>>1,screen->h-font->maxheight-2,-1,"Press [R] to quit",font);
+	spFontDrawMiddle(screen->w>>1,2,-1,"Press [B] to pause",font);
 	#ifdef SCALE_UP
 	spScale2XSmooth(screen,real_screen);
 	#endif
@@ -137,8 +138,9 @@ void draw(void)
 
 int calc(Uint32 steps)
 {
-	rotation += steps*32;
 	PspInput engineInput = spGetInput();
+	if (!engineInput->button[SP_BUTTON_SELECT])
+		rotation += steps*32;
 	if (engineInput->button[SP_BUTTON_START])
 		return 1;
 	return 0;
