@@ -27,6 +27,7 @@ pPoint firstPoint = NULL;
 pPoint  lastPoint = NULL;
 pPoint* pointArray;
 int pointCount;
+float maxU = 0.0f;
 
 void resize( Uint16 w, Uint16 h )
 {
@@ -70,7 +71,7 @@ float L_g_i(float t,int g,int i)
 	{
 		if (k == i)
 			continue;
-		result *= ((float)(t)-pointArray[k]->u)/(pointArray[i]->u-pointArray[k]->u);
+		result *= (t-pointArray[k]->u)/(pointArray[i]->u-pointArray[k]->u);
 	}
 	return result;
 }
@@ -93,13 +94,19 @@ void draw(void)
 	spLine3D(0,0,0,0,0,1<<SP_ACCURACY,spGetFastRGB(0,0,255));
 	
 	pPoint point = firstPoint;
+	int i = 1;
 	while (point)
 	{
 		spEllipse3D(spFloatToFixed(point->x),spFloatToFixed(point->y),spFloatToFixed(point->z),1<<SP_ACCURACY-4,1<<SP_ACCURACY-4,spGetFastRGB(255,255,0));
+		Sint32 x,y,z;
+		spProjectPoint3D(spFloatToFixed(point->x),spFloatToFixed(point->y),spFloatToFixed(point->z),&x,&y,&z,1);
+		char buffer[8];
+		sprintf(buffer,"%i",i);
+		spFontDrawMiddle(x,y,z,buffer,font);
+		i++;
 		point = point->next;
 	}
 	//control polygon
-	int i;
 	for (i = 1; i < pointCount; i++)
 		spLine3D(spFloatToFixed(pointArray[i-1]->x),spFloatToFixed(pointArray[i-1]->y),spFloatToFixed(pointArray[i-1]->z),
 						 spFloatToFixed(pointArray[i  ]->x),spFloatToFixed(pointArray[i  ]->y),spFloatToFixed(pointArray[i  ]->z),spGetFastRGB(127,127,127));
@@ -110,7 +117,7 @@ void draw(void)
   switch (type)
   {
 		case lagrange:
-			for (t = 0.0f; t <= (float)((pointCount-1)*2-1); t+=0.01f)
+			for (t = 0.0f; t <= maxU; t+=0.01f)
 			{
 				tPoint mom = {0.0f,0.0f,0.0f};
 				for (i = 0; i < pointCount; i++)
@@ -184,6 +191,8 @@ int main(int argc, char **argv)
 		point->y = atof(argv[i+1]);
 		point->z = atof(argv[i+2]);
 		point->u = atof(argv[i+3]);
+		if (point->u > maxU)
+			maxU = point->u;
 		point->next = NULL;
 		if (lastPoint)
 			lastPoint->next = point;
