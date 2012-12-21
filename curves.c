@@ -9,6 +9,23 @@ SDL_Surface* real_screen;
 SDL_Surface* screen = NULL;
 #define CLOUD_COUNT 16
 
+typedef struct sPoint *pPoint;
+typedef struct sPoint
+{
+	float x,y,z;
+	pPoint next;
+} tPoint;
+
+typedef enum eType
+{
+	lagrange = 0
+} tType;
+
+tType type = lagrange;
+
+pPoint firstPoint = NULL;
+pPoint  lastPoint = NULL;
+
 void resize( Uint16 w, Uint16 h )
 {
 	#ifdef SCALE_UP
@@ -41,6 +58,8 @@ void resize( Uint16 w, Uint16 h )
 	spSelectRenderTarget(screen);
 }
 
+Sint32 rotation = 0;
+
 void draw(void)
 {
 	Sint32* modellViewMatrix=spGetMatrix();
@@ -48,6 +67,23 @@ void draw(void)
 	spClearTarget(spGetRGB(0,0,32));
 	spResetZBuffer();
 	spIdentity();
+	spTranslate(0,0,-10<<SP_ACCURACY);
+	
+	spRotateX(rotation);
+	spRotateY(rotation>>1);
+	spRotateZ(rotation>>2);
+	
+	spLine3D(0,0,0,1<<SP_ACCURACY,0,0,spGetFastRGB(255,0,0));
+	spLine3D(0,0,0,0,1<<SP_ACCURACY,0,spGetFastRGB(0,255,0));
+	spLine3D(0,0,0,0,0,1<<SP_ACCURACY,spGetFastRGB(0,0,255));
+	
+	pPoint point = firstPoint;
+	
+	while (point)
+	{
+		spEllipse3D(spFloatToFixed(point->x),spFloatToFixed(point->y),spFloatToFixed(point->z),1<<SP_ACCURACY-4,1<<SP_ACCURACY-4,spGetFastRGB(255,255,0));
+		point = point->next;
+	}
 
 	spFontDrawMiddle(screen->w>>1,screen->h-font->maxheight-2,-1,"Press [R] to quit",font);
 	#ifdef SCALE_UP
@@ -58,6 +94,7 @@ void draw(void)
 
 int calc(Uint32 steps)
 {
+	rotation += steps*32;
 	PspInput engineInput = spGetInput();
 	if (engineInput->button[SP_BUTTON_START])
 		return 1;
@@ -66,6 +103,41 @@ int calc(Uint32 steps)
 
 int main(int argc, char **argv)
 {
+	printf("Use curves.sh kind control-point-1 control-point-2 [control-point-3..n]\n");
+	printf("* kind can be \"lagrange\".\n");
+	printf("* a point has to have this form: {x,y,z} with x,y,z floating points numbers.\n");
+	int i;
+	if (argc < 8)
+	{
+		printf("Too few arguments.\n");
+		return 1;
+	}
+	if (strcmp(argv[1],"lagrange") == 0)
+		type = lagrange;
+	else
+	{
+		printf("Unknown argument %s.\n",argv[1]);
+		return 1;
+	}
+	if ((argc-2) % 3 != 0)
+	{
+		printf("Every point needs 3 floats!\n");
+		return 1;
+	}
+	for (i = 2; i < argc; i+=3)
+	{
+		pPoint point = (pPoint)malloc(sizeof(tPoint));
+		point->x = atof(argv[i+0]);
+		point->y = atof(argv[i+1]);
+		point->z = atof(argv[i+2]);
+		point->next = NULL;
+		if (lastPoint)
+			lastPoint->next = point;
+		else
+			firstPoint = point;
+		lastPoint = point;
+		printf("Added point ( %6.2f | %6.2f | %6.2f )\n",point->x,point->y,point->z);
+	}
 	spSetDefaultWindowSize( 800, 480 );
 	spInitCore();
 	//Setup
