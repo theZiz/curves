@@ -133,7 +133,7 @@ void draw(void)
 	for (i = 1; i < pointCount; i++)
 		spLine3D(spFloatToFixed(pointArray[i-1]->x),spFloatToFixed(pointArray[i-1]->y),spFloatToFixed(pointArray[i-1]->z),
 						 spFloatToFixed(pointArray[i  ]->x),spFloatToFixed(pointArray[i  ]->y),spFloatToFixed(pointArray[i  ]->z),spGetFastRGB(127,127,127));
-
+	spSetAlphaTest(0);
   //curve
   float t;
   tPoint prev;
@@ -152,12 +152,10 @@ void draw(void)
 				}
 				if (t!=0)
 					spLine3D(spFloatToFixed(prev.x),spFloatToFixed(prev.y),spFloatToFixed(prev.z),
-					         spFloatToFixed( mom.x),spFloatToFixed( mom.y),spFloatToFixed( mom.z),spGetFastRGB(0,255,255));
+					         spFloatToFixed( mom.x),spFloatToFixed( mom.y),spFloatToFixed( mom.z),spGetFastRGB(255,0,255));
 				prev = mom;
 			}
-		break;
 		case hermit:
-		break;
 		case bezier:
 			for (t = 0.0f; t <= 1.0f; t+=0.01f)
 			{
@@ -176,6 +174,7 @@ void draw(void)
 			}
 		break;
 	}
+	spSetAlphaTest(1);
 	spFontDrawMiddle(screen->w>>1,screen->h-font->maxheight-2,-1,"Press [R] to quit",font);
 	spFontDrawMiddle(screen->w>>1,2,-1,"Press [B] to pause",font);
 	#ifdef SCALE_UP
@@ -270,8 +269,6 @@ int main(int argc, char **argv)
 	resize( screen->w, screen->h );
 	#endif
 	
-	spSetZSet(0);
-	spSetZTest(0);
 	
 	spLoop(draw,calc,10,resize,NULL);
 	#ifdef SCALE_UP
