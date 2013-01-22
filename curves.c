@@ -13,17 +13,18 @@ SDL_Surface* screen = NULL;
 typedef struct sPoint *pPoint;
 typedef struct sPoint
 {
-	float x,y,z,u;
+	float x,y,z,w,u;
 	pPoint next;
 } tPoint;
 
-#define TYPE_MAX 4
+#define TYPE_MAX 5
 typedef enum eType
 {
 	lagrange = 0,
 	hermit = 1,
 	bezier = 2,
-	casteljau = 3
+	b_splines = 3,
+	casteljau = 4
 } tType;
 
 tType type = lagrange;
@@ -32,7 +33,6 @@ pPoint firstPoint = NULL;
 pPoint  lastPoint = NULL;
 pPoint* pointArray;
 int pointCount;
-int hermitCount;
 float maxU = 0.0f;
 
 void resize( Uint16 w, Uint16 h )
@@ -99,6 +99,19 @@ float g_over_i(int g,int i)
 float B_g_i(float t,int g,int i)
 {
 	return g_over_i(g,i)*pow(1.0f-t,g-i)*pow(t,i);
+}
+
+float N_g_i(float t,int g,int i)
+{
+	i = i%pointCount;
+	if (g <= 0)
+	{
+		if (pointArray[i]->u <= t && t < pointArray[i+1]->u)
+			return 1;
+		return 0;
+	}
+	return (t-pointArray[i]->u    )/(pointArray[(i+g)%pointCount]->u-pointArray[i]->u    )*N_g_i(t,g-1,i)+
+	       (pointArray[(i+1+g)%pointCount]->u-t)/(pointArray[(i+1+g)%pointCount]->u-pointArray[(i+1)%pointCount]->u)*N_g_i(t,g-1,i+1);
 }
 
 float H_3_i(float t,int i)
@@ -186,7 +199,11 @@ void draw(void)
 					mom.x += L * pointArray[i]->x;
 					mom.y += L * pointArray[i]->y;
 					mom.z += L * pointArray[i]->z;
+					mom.w += L * pointArray[i]->w;
 				}
+				mom.x /= mom.w;
+				mom.y /= mom.w;
+				mom.z /= mom.w;
 				if (t!=0)
 					spLine3D(spFloatToFixed(prev.x),spFloatToFixed(prev.y),spFloatToFixed(prev.z),
 					         spFloatToFixed( mom.x),spFloatToFixed( mom.y),spFloatToFixed( mom.z),spGetFastRGB(255,0,255));
@@ -196,28 +213,28 @@ void draw(void)
 			spFontDrawMiddle(screen->w>>1,2,-1,"Lagrange",font);
 		break;
 		case hermit:
-			for (i = 0; i < hermitCount; i++)
-				for (t = pointArray[i]->u; t < pointArray[(i+1)%hermitCount]->u; t+=0.01f)
+			for (i = 0; i < pointCount; i++)
+				for (t = pointArray[i]->u; t < pointArray[(i+1)%pointCount]->u; t+=0.01f)
 				{
 					tPoint mom,m1,m2;
 					if (i == 0)
 					{
-						m1.x = pointArray[(i+1)%hermitCount]->x - pointArray[(i+hermitCount-2)%hermitCount]->x;
-						m1.y = pointArray[(i+1)%hermitCount]->y - pointArray[(i+hermitCount-2)%hermitCount]->y;
-						m1.z = pointArray[(i+1)%hermitCount]->z - pointArray[(i+hermitCount-2)%hermitCount]->z;
+						m1.x = pointArray[(i+1)%pointCount]->x - pointArray[(i+pointCount-2)%pointCount]->x;
+						m1.y = pointArray[(i+1)%pointCount]->y - pointArray[(i+pointCount-2)%pointCount]->y;
+						m1.z = pointArray[(i+1)%pointCount]->z - pointArray[(i+pointCount-2)%pointCount]->z;
 					}
 					else
 					if (i != pointCount)
 					{
-						m1.x = pointArray[(i+1)%hermitCount]->x - pointArray[(i+hermitCount-1)%hermitCount]->x;
-						m1.y = pointArray[(i+1)%hermitCount]->y - pointArray[(i+hermitCount-1)%hermitCount]->y;
-						m1.z = pointArray[(i+1)%hermitCount]->z - pointArray[(i+hermitCount-1)%hermitCount]->z;
+						m1.x = pointArray[(i+1)%pointCount]->x - pointArray[(i+pointCount-1)%pointCount]->x;
+						m1.y = pointArray[(i+1)%pointCount]->y - pointArray[(i+pointCount-1)%pointCount]->y;
+						m1.z = pointArray[(i+1)%pointCount]->z - pointArray[(i+pointCount-1)%pointCount]->z;
 					}
 					else
 					{
-						m1.x = pointArray[(i+2)%hermitCount]->x - pointArray[(i+hermitCount-1)%hermitCount]->x;
-						m1.y = pointArray[(i+2)%hermitCount]->y - pointArray[(i+hermitCount-1)%hermitCount]->y;
-						m1.z = pointArray[(i+2)%hermitCount]->z - pointArray[(i+hermitCount-1)%hermitCount]->z;
+						m1.x = pointArray[(i+2)%pointCount]->x - pointArray[(i+pointCount-1)%pointCount]->x;
+						m1.y = pointArray[(i+2)%pointCount]->y - pointArray[(i+pointCount-1)%pointCount]->y;
+						m1.z = pointArray[(i+2)%pointCount]->z - pointArray[(i+pointCount-1)%pointCount]->z;
 					}
 					/*float l = sqrt(m1.x*m1.x+m1.y*m1.y+m1.z*m1.z);
 					m1.x /= l;
@@ -225,22 +242,22 @@ void draw(void)
 					m1.z /= l;*/
 					if (i == 0)
 					{
-						m2.x = pointArray[(i+2)%hermitCount]->x - pointArray[(i+0)%hermitCount]->x;
-						m2.y = pointArray[(i+2)%hermitCount]->y - pointArray[(i+0)%hermitCount]->y;
-						m2.z = pointArray[(i+2)%hermitCount]->z - pointArray[(i+0)%hermitCount]->z;
+						m2.x = pointArray[(i+2)%pointCount]->x - pointArray[(i+0)%pointCount]->x;
+						m2.y = pointArray[(i+2)%pointCount]->y - pointArray[(i+0)%pointCount]->y;
+						m2.z = pointArray[(i+2)%pointCount]->z - pointArray[(i+0)%pointCount]->z;
 					}
 					else
 					if (i != pointCount)
 					{
-						m2.x = pointArray[(i+2)%hermitCount]->x - pointArray[(i+0)%hermitCount]->x;
-						m2.y = pointArray[(i+2)%hermitCount]->y - pointArray[(i+0)%hermitCount]->y;
-						m2.z = pointArray[(i+2)%hermitCount]->z - pointArray[(i+0)%hermitCount]->z;
+						m2.x = pointArray[(i+2)%pointCount]->x - pointArray[(i+0)%pointCount]->x;
+						m2.y = pointArray[(i+2)%pointCount]->y - pointArray[(i+0)%pointCount]->y;
+						m2.z = pointArray[(i+2)%pointCount]->z - pointArray[(i+0)%pointCount]->z;
 					}
 					else
 					{
-						m2.x = pointArray[(i+3)%hermitCount]->x - pointArray[(i+1)%hermitCount]->x;
-						m2.y = pointArray[(i+3)%hermitCount]->y - pointArray[(i+1)%hermitCount]->y;
-						m2.z = pointArray[(i+3)%hermitCount]->z - pointArray[(i+1)%hermitCount]->z;
+						m2.x = pointArray[(i+3)%pointCount]->x - pointArray[(i+1)%pointCount]->x;
+						m2.y = pointArray[(i+3)%pointCount]->y - pointArray[(i+1)%pointCount]->y;
+						m2.z = pointArray[(i+3)%pointCount]->z - pointArray[(i+1)%pointCount]->z;
 					}
 					/*l = sqrt(m2.x*m2.x+m2.y*m2.y+m2.z*m2.z);
 					m2.x /= l;
@@ -253,21 +270,40 @@ void draw(void)
 					mom.x = f1 * pointArray[i]->x
 								+ f2 * m1.x
 								+ f3 * m2.x
-								+ f4 * pointArray[(i+1)%hermitCount]->x;
+								+ f4 * pointArray[(i+1)%pointCount]->x;
 					mom.y = f1 * pointArray[i]->y
 								+ f2 * m1.y
 								+ f3 * m2.y
-								+ f4 * pointArray[(i+1)%hermitCount]->y;
+								+ f4 * pointArray[(i+1)%pointCount]->y;
 					mom.z = f1 * pointArray[i]->z
 								+ f2 * m1.z
 								+ f3 * m2.z
-								+ f4 * pointArray[(i+1)%hermitCount]->z;
+								+ f4 * pointArray[(i+1)%pointCount]->z;
 					if (t!=0)
 						spLine3D(spFloatToFixed(prev.x),spFloatToFixed(prev.y),spFloatToFixed(prev.z),
 										 spFloatToFixed( mom.x),spFloatToFixed( mom.y),spFloatToFixed( mom.z),spGetFastRGB(127,127,255));
 					prev = mom;
 				}
 			spFontDrawMiddle(screen->w>>1,2,-1,"Hermite",font);
+		break;
+		case b_splines:
+			for (t = 0.0f; t <= maxU; t+=0.01f)
+			{
+				tPoint mom = {0.0f,0.0f,0.0f};
+				int k = 2;
+				for (i = k; i < pointCount-k; i++)
+				{
+					float N = N_g_i(t,k,i);
+					mom.x += N * pointArray[i]->x;
+					mom.y += N * pointArray[i]->y;
+					mom.z += N * pointArray[i]->z;
+				}
+				if (t!=0)
+					spLine3D(spFloatToFixed(prev.x),spFloatToFixed(prev.y),spFloatToFixed(prev.z),
+					         spFloatToFixed( mom.x),spFloatToFixed( mom.y),spFloatToFixed( mom.z),spGetFastRGB(0,255,255));
+				prev = mom;
+			}
+			spFontDrawMiddle(screen->w>>1,2,-1,"B Splines",font);
 		break;
 		case bezier:
 			for (t = 0.0f; t <= 1.0f; t+=0.01f)
@@ -371,6 +407,7 @@ int main(int argc, char **argv)
 		point->x = atof(argv[i+0]);
 		point->y = atof(argv[i+1]);
 		point->z = atof(argv[i+2]);
+		point->w = 1.0f;
 		point->u = atof(argv[i+3]);
 		if (point->u > maxU)
 			maxU = point->u;
@@ -383,8 +420,7 @@ int main(int argc, char **argv)
 		printf("Added point ( %6.2f | %6.2f | %6.2f )\n",point->x,point->y,point->z);
 		pointCount++;
 	}
-	hermitCount = pointCount+1;
-	pointArray = (pPoint*)malloc(sizeof(pPoint)*hermitCount);
+	pointArray = (pPoint*)malloc(sizeof(pPoint)*pointCount);
 	i = 0;
 	pPoint point = firstPoint;
 	while (point)
@@ -393,12 +429,7 @@ int main(int argc, char **argv)
 		i++;
 		point = point->next;
 	}
-	pointArray[pointCount] = (pPoint)malloc(sizeof(tPoint));
-	pointArray[pointCount]->x = firstPoint->x;
-	pointArray[pointCount]->y = firstPoint->y;
-	pointArray[pointCount]->z = firstPoint->z;
-	pointArray[pointCount]->u = lastPoint->u + maxU / pointCount;
-	pointArray[pointCount]->next = NULL;
+	pointArray[0]->w = 2.0f;
 	spSetDefaultWindowSize( 800, 480 );
 	spInitCore();
 	//Setup
