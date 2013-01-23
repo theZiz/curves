@@ -17,14 +17,26 @@ typedef struct sPoint
 	pPoint next;
 } tPoint;
 
-#define TYPE_MAX 5
+typedef struct s2Point *p2Point;
+typedef struct s2Point
+{
+	tPoint left,right;
+} t2Point;
+
+#define MASK_SIZE 7
+#define SUBDIVISION 2
+
+const float mask[MASK_SIZE] = {-1.0f/16.0f,0.0f/16.0f,9.0f/16.0f,16.0f/16.0f,9.0f/16.0f,0.0f/16.0f,-1.0f/16.0f};
+
+#define TYPE_MAX 6
 typedef enum eType
 {
 	lagrange = 0,
 	hermit = 1,
 	bezier = 2,
 	b_splines = 3,
-	casteljau = 4
+	casteljau = 4,
+	subdivision = 5
 } tType;
 
 tType type = lagrange;
@@ -149,6 +161,41 @@ tPoint b_r_i(float t,int r,int i)
 	return result;
 }
 
+
+t2Point sub_division(int pos)
+{
+	int i;
+	t2Point result;
+	result.left.x = 0.0f;
+	result.left.y = 0.0f;
+	result.left.z = 0.0f;
+	result.right.x = 0.0f;
+	result.right.y = 0.0f;
+	result.right.z = 0.0f;
+	int l = 1;
+	for (i = 0; i < MASK_SIZE; i++)
+	{
+		if (l)
+		{
+			result.left.x += pointArray[pos]->x*mask[i];
+			result.left.y += pointArray[pos]->y*mask[i];
+			result.left.z += pointArray[pos]->z*mask[i];
+			printf("%f %f %f\n",result.left.x,result.left.y,result.left.z);
+		}
+			else
+		{
+			result.right.x += pointArray[pos]->x*mask[i];
+			result.right.y += pointArray[pos]->y*mask[i];
+			result.right.z += pointArray[pos]->z*mask[i];
+		}
+		l = 1-l;
+		pos++;
+		if (pos >= pointCount)
+			pos = 0;
+	}
+	return result;
+}
+
 void draw(void)
 {
 	Sint32* modellViewMatrix=spGetMatrix();
@@ -183,6 +230,10 @@ void draw(void)
 	for (i = 1; i < pointCount; i++)
 		spLine3D(spFloatToFixed(pointArray[i-1]->x),spFloatToFixed(pointArray[i-1]->y),spFloatToFixed(pointArray[i-1]->z),
 						 spFloatToFixed(pointArray[i  ]->x),spFloatToFixed(pointArray[i  ]->y),spFloatToFixed(pointArray[i  ]->z),spGetFastRGB(127,127,127));
+	spSetAlphaPattern4x4(127,0);
+		spLine3D(spFloatToFixed(pointArray[pointCount-1]->x),spFloatToFixed(pointArray[pointCount-1]->y),spFloatToFixed(pointArray[pointCount-1]->z),
+						 spFloatToFixed(pointArray[0  ]->x),spFloatToFixed(pointArray[0  ]->y),spFloatToFixed(pointArray[0  ]->z),spGetFastRGB( 63, 63, 63));
+	spDeactivatePattern();
   //curve
   float t;
   tPoint prev;
@@ -333,6 +384,15 @@ void draw(void)
 				prev = mom;
 			}
 			spFontDrawMiddle(screen->w>>1,2,-1,"Casteljau",font);
+		break;
+		case subdivision:
+			for (i = 0; i < pointCount; i++)
+			{
+				t2Point mom = sub_division(i);
+				spLine3D(spFloatToFixed( mom.left.x),spFloatToFixed( mom.left.y),spFloatToFixed( mom.left.z),
+								 spFloatToFixed(mom.right.x),spFloatToFixed(mom.right.y),spFloatToFixed(mom.right.z),spGetFastRGB(i*255/pointCount,255-i*255/pointCount,0));
+			}
+			spFontDrawMiddle(screen->w>>1,2,-1,"Subdivision",font);
 		break;
 	}
 	spFontDraw(2,2,-1,"[q] before",font);
